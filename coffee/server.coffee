@@ -4,7 +4,7 @@ max = require('./max')
 http = require("http")
 
 clustered = config.instances > 1
-
+worker_pid = 0
 
 # If clustered setup redis clients and spawn "workers"
 if clustered
@@ -26,6 +26,7 @@ if clustered
         console.log 'forked worker ' + worker.process.pid
       cluster.on "listening", (worker, address) ->
         console.log "worker " + worker.process.pid + " is now connected to " + address.address + ":" + address.port
+
       cluster.on "exit", (worker, code, signal) ->
         console.log "worker " + worker.process.pid + " died"
 
@@ -33,8 +34,12 @@ if clustered
 # Setup http server and socketio endpoint
 app = require("express")()
 server = require("http").createServer(app)
-io = require("socket.io").listen(server)
 
+socketio_settings =
+    log: false
+
+io = require("socket.io").listen(server, socketio_settings)
+console.log "Socketio Started"
 
 # Setup Redis Store on socketio only if we are in a cluster
 if clustered
@@ -49,10 +54,9 @@ server.listen config.port
 app.get "/", (req, res) ->
     res.sendfile(__dirname + '/index.html');
 
-
 # Handle events inside a conversation
 conversations = io.of(config.namespace).on "connection", (socket) ->
-    console.log 'socket call handled by worker with pid ' + process.pid
+    console.log 'socket call handled by worker with pid ' + worker_pid
 
     # Handle users joining the service
     socket.on "join", (data) ->
