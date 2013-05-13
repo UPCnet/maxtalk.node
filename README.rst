@@ -4,8 +4,8 @@ Maxtalk NODE
 Notification system for MAX conversations. The system is using socketIO as a base, on top of a node.js server, and implements the following protocol to communicate server and client:
 
 
-Initial handshake
------------------
+Usage and protocol
+------------------
 
 The conceptual handshake steps are:
 

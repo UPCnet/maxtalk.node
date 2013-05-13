@@ -1,5 +1,6 @@
+config = require '../../config/config.js'
 mongoose = require 'mongoose'
-mongoose.connect 'mongodb://localhost/max'
+mongoose.connect(config.mongogodb_uri)
 
 userSchema = mongoose.Schema
     username: String
