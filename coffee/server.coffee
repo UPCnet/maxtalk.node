@@ -4,7 +4,8 @@ max = require('./max')
 http = require("http")
 
 clustered = config.instances > 1
-worker_pid = 0
+master = true
+
 
 # If clustered setup redis clients and spawn "workers"
 if clustered
@@ -17,7 +18,8 @@ if clustered
     cluster = require("cluster")
 
     # Spawn only once
-    if cluster.isMaster
+    master = cluster.isMaster
+    if master
       i = 0
       while i < config.instances
         cluster.fork()
@@ -31,70 +33,83 @@ if clustered
         console.log "worker " + worker.process.pid + " died"
 
 
-# Setup http server and socketio endpoint
-app = require("express")()
-server = require("http").createServer(app)
+if not master or config.instances == 1
 
-socketio_settings =
-    log: false
+    console.log 'here'
+    # Setup http server and socketio endpoint
+    app = require("express")()
+    server = require("http").createServer(app)
 
-io = require("socket.io").listen(server, socketio_settings)
-console.log "Socketio Started"
+    socketio_settings =
+        log: config.debug_socketio
 
-# Setup Redis Store on socketio only if we are in a cluster
-if clustered
-    io.set "store", new RedisStore(
-        redisPub: pub
-        redisSub: sub
-        redisClient: client
-    )
+    io = require("socket.io").listen(server, socketio_settings)
+    console.log "Socketio Started"
 
-# Start http server
-server.listen config.port
-app.get "/", (req, res) ->
-    res.sendfile(__dirname + '/index.html');
+    # Setup Redis Store on socketio only if we are in a cluster
+    if clustered
+        io.set "store", new RedisStore(
+            redisPub: pub
+            redisSub: sub
+            redisClient: client
+        )
 
-# Handle events inside a conversation
-conversations = io.of(config.namespace).on "connection", (socket) ->
-    console.log 'socket call handled by worker with pid ' + worker_pid
+    # Start http server
+    server.listen config.port
+    app.get "/", (req, res) ->
+        res.sendfile(__dirname + '/index.html');
 
-    # Handle users joining the service
-    socket.on "join", (data) ->
-        socket._max_username = data.username # store username in the socket
+    # Handle events inside a conversation
+    conversations = io.of(config.namespace).on "connection", (socket) ->
+        #console.log 'socket call handled by worker with pid ' + process.pid
 
-        # Find user conversations on Mongo
-        max.User.find {username: data.username}, (err, doc) ->
-            cids = (conversation.id for conversation in doc[0].talkingIn.items)
+        # Handle users joining the service
+        socket.on "join", (data) ->
+            socket._max_username = data.username # store username in the socket
 
-            # Notify user to which conversation is listening
-            socket.emit "listening",
-                conversations: cids
+            # Find user conversations on Mongo
+            max.User.find {username: data.username}, (err, doc) ->
+                cids = (conversation.id for conversation in doc[0].talkingIn.items)
 
-            # Push the user inside a room for each conversation
-            # Rooms are created on demand, with the patern /max/xxxxxxxxxx
-            # Where /max is the configured namespace name and xxxxx the conversation id
-            socket.join cid for cid in cids
+                # Notify user to which conversation is listening
+                socket.emit "listening",
+                    conversations: cids
 
-            # XXX DEBUG ONLY ??
-            # Emits the number of people curently in a room to everyone in the room
-            conversations.in(cid).emit 'people',
-                inroom: conversations.manager.rooms[conversations.name+'/'+cid].length
+                # Push the user inside a room for each conversation
+                # Rooms are created on demand, with the patern /max/xxxxxxxxxx
+                # Where /max is the configured namespace name and xxxxx the conversation id
+                socket.join cid for cid in cids
 
+                # # XXX DEBUG ONLY ??
+                # # Emits the number of people curently in a room to everyone in the room
+                # conversations.in(cid).emit 'people',
+                #     inroom: conversations.manager.rooms[conversations.name+'/'+cid].length
+
+                rooms = conversations.manager.rooms
+                socket.emit 'people',
+                    rooms: rooms
+                    pid: process.pid
+
+
+                # Notify all conversation members (except sender)
+                # that a user has joined a specific conversation
+                socket.broadcast.to(cid).emit 'joined',
+                    username: data.username
+                    conversation: cid
+
+        # Handle users sending messages
+        socket.on "message", (data) ->
             # Notify all conversation members (except sender)
-            # that a user has joined a specific conversation
-            socket.broadcast.to(cid).emit 'joined',
-                username: data.username
-                conversation: cid
-
-    # Handle users sending messages
-    socket.on "message", (data) ->
-        # Notify all conversation members (except sender)
-        # that a new message has been sent to the conversation
-        socket.broadcast.to(data.conversation).emit 'update',
-            username: socket._max_username
-            timestamp: data.timestamp
+            # that a new message has been sent to the conversation
+            socket.broadcast.to(data.conversation).emit 'update',
+                username: socket._max_username
+                timestamp: data.timestamp
 
 
-
-
+        # Handle users sending messages
+        socket.on "ask", (cid) ->
+            rooms = conversations.manager.rooms
+            socket.emit 'people',
+                rooms: rooms
+                pid: process.pid
 
