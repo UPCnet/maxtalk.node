@@ -1,4 +1,4 @@
-Maxtalk NODE
+cMaxtalk NODE
 ============
 
 Notification system for MAX conversations. The system is using socketIO as a base, on top of a node.js server, and implements the following protocol to communicate server and client:
@@ -12,7 +12,11 @@ The conceptual handshake steps are:
     * Client connects to socketIO
     * Client registers on *max* namespace
     * Client *joins* his current conversations
+
+After that:
+
     * Client listens for events
+    * Client sends messages
 
 
 In a javascript client, this goes this way:
@@ -48,7 +52,7 @@ where ``conversations`` is a list of conversations id's. At the same time user r
 
 where username is the new user that has joined the conversation. Obviously this event will be emmitted only to already listening users, and won't be received by the user that has just joined.
 
-From that point, every message sent from client to server will be broadcasted to every user in the conversation except the sender. To send a message notification, the client has to emit a ``message`` event with the following data:
+From that point, every message sent from client to server will be broadcasted to every user in the conversation except the sender. To send a message notification, the client has to emit a ``talk`` event with the following data:
 
 .. code-block:: javascript
 
@@ -65,7 +69,8 @@ The server will broadcast a ``update`` event to users in the conversation, telli
 .. code-block:: javascript
 
     {
-        'username': 'nom.cognom'
+        'username': 'nom.cognom',
+        'conversation': 'fasrgarbaa4wg4wgaw4',
         'timestamp': 347815255145614,
         'messageID': 0f2343512345252
     }

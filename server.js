@@ -95,13 +95,14 @@
           });
         });
       });
-      socket.on("message", function(data) {
+      socket.on("talk", function(data) {
         return socket.broadcast.to(data.conversation).emit('update', {
+          conversation: data.conversation,
           username: socket._max_username,
           timestamp: data.timestamp
         });
       });
-      return socket.on("ask", function(cid) {
+      socket.on("ask", function(cid) {
         var rooms;
 
         rooms = conversations.manager.rooms;
@@ -109,6 +110,9 @@
           rooms: rooms,
           pid: process.pid
         });
+      });
+      return socket.on("disconnect", function() {
+        return console.log("Disconnected" + socket._max_username);
       });
     });
   }

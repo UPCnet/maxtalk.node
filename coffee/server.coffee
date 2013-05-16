@@ -98,10 +98,11 @@ if not master or config.instances == 1
                     conversation: cid
 
         # Handle users sending messages
-        socket.on "message", (data) ->
+        socket.on "talk", (data) ->
             # Notify all conversation members (except sender)
             # that a new message has been sent to the conversation
             socket.broadcast.to(data.conversation).emit 'update',
+                conversation: data.conversation
                 username: socket._max_username
                 timestamp: data.timestamp
 
@@ -113,3 +114,5 @@ if not master or config.instances == 1
                 rooms: rooms
                 pid: process.pid
 
+        socket.on "disconnect", () ->
+            console.log "Disconnected"+socket._max_username
